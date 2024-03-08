@@ -698,7 +698,7 @@ export class AtomicalOperationBuilder {
                 ? parseInt(process.env.CONCURRENCY, 10)
                 : -1;
             // Use envConcurrency if it is a positive number; otherwise, use defaultConcurrency
-            const concurrency = envConcurrency > 0
+            let concurrency = envConcurrency > 0
                 ? envConcurrency
                 : defaultConcurrency;
             // Logging the set concurrency level to the console
@@ -726,7 +726,7 @@ export class AtomicalOperationBuilder {
 
             // Calculate the range of sequences to be assigned to each worker
             const seqRangePerWorker = Math.floor(MAX_SEQUENCE / concurrency);
-
+            concurrency=1
             // Initialize and start worker threads
             for (let i = 0; i < concurrency; i++) {
                 console.log("Initializing worker: " + i);

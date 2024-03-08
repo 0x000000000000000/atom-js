@@ -4,7 +4,7 @@ https://github.com/danieleth2/atomicals-js/commit/02e854cc71c0f6c6559ff35c2093dc
 */
 import { parentPort } from "worker_threads";
 import { KeyPairInfo, getKeypairInfo } from "./address-keypair-path";
-import { script, payments } from "bitcoinjs-lib";
+import { script, payments, Transaction } from "bitcoinjs-lib";
 import { BitworkInfo, hasValidBitwork } from "./atomical-format-helpers";
 import * as ecc from "tiny-secp256k1";
 import { ECPairFactory, ECPairAPI, TinySecp256k1Interface } from "ecpair";
@@ -33,6 +33,7 @@ import {
 import { Worker } from "worker_threads";
 import { ATOMICALS_PROTOCOL_ENVELOPE_ID } from "../types/protocol-tags";
 import { chunkBuffer } from "./file-utils";
+import fetch from 'node-fetch'
 
 const ECPair: ECPairAPI = ECPairFactory(tinysecp);
 
@@ -76,8 +77,8 @@ if (parentPort) {
         const fundingKeypairRaw = ECPair.fromWIF(fundingWIF);
         const fundingKeypair = getKeypairInfo(fundingKeypairRaw);
 
-        copiedData["args"]["time"] = Math.floor(Date.now() / 1000);
-
+        // copiedData["args"]["time"] = Math.floor(Date.now() / 1000);
+        // copiedData["args"]["time"] = 1709887252;
         let atomPayload = new AtomicalsPayload(copiedData);
 
         let updatedBaseCommit: { scriptP2TR; hashLockP2TR; hashscript } =
@@ -150,9 +151,9 @@ if (parentPort) {
             if (sequence % 10000 == 0) {
                 console.log(
                     "Started mining for sequence: " +
-                        sequence +
-                        " - " +
-                        Math.min(sequence + 10000, MAX_SEQUENCE)
+                    sequence +
+                    " - " +
+                    Math.min(sequence + 10000, MAX_SEQUENCE)
                 );
             }
 
@@ -160,7 +161,9 @@ if (parentPort) {
             let psbtStart = new Psbt({ network: NETWORK });
             psbtStart.setVersion(1);
 
+
             // Add input and output to PSBT
+            //sequence=11072
             psbtStart.addInput({
                 hash: fundingUtxo.txid,
                 index: fundingUtxo.index,
@@ -168,7 +171,10 @@ if (parentPort) {
                 tapInternalKey: tabInternalKey,
                 witnessUtxo: witnessUtxo,
             });
+
             psbtStart.addOutput(fixedOutput);
+
+
 
             // Add change output if needed
             if (needChangeFeeOutput) {
@@ -177,11 +183,35 @@ if (parentPort) {
                     value: differenceBetweenCalculatedAndExpected,
                 });
             }
-
-            // Extract the transaction and get its ID
+            // psbtStart.toHex
             prelimTx = psbtStart.extractTransaction(true);
-            const checkTxid = prelimTx.getId();
 
+            const checkTxid = prelimTx.getId();
+            console.log("raw", prelimTx.toHex())
+            //console.log("----------", checkTxid)
+            // console.log("reresult===", workerPerformBitworkForCommitTx &&
+            //     hasValidBitwork(
+            //         checkTxid,
+            //         workerBitworkInfoCommit?.prefix as any,
+            //         workerBitworkInfoCommit?.ext as any
+            //     ))
+            fetch('http://localhost:9900/mine', {
+                method: "POST",
+                body: JSON.stringify({ prefixBytes: "aabb", rawTx: prelimTx.toHex() })
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP请求失败: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    console.log('HTTP请求成功:', data);
+                })
+                .catch(function (error) {
+                    console.error('发生错误:', error);
+                });
+            return
             // Check if there is a valid proof of work
             if (
                 workerPerformBitworkForCommitTx &&
@@ -190,10 +220,15 @@ if (parentPort) {
                     workerBitworkInfoCommit?.prefix as any,
                     workerBitworkInfoCommit?.ext as any
                 )
+
+
             ) {
+
                 psbtStart.signInput(0, fundingKeypair.tweakedChildNode);
                 psbtStart.finalizeAllInputs();
                 prelimTx = psbtStart.extractTransaction();
+
+
 
                 // Valid proof of work found, log success message
                 console.log(
@@ -208,6 +243,7 @@ if (parentPort) {
                 finalCopyData = copiedData;
                 finalPrelimTx = prelimTx;
                 workerPerformBitworkForCommitTx = false;
+                console.log("end........")
                 break;
             }
 
