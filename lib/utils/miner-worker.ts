@@ -80,7 +80,8 @@ if (parentPort) {
         // copiedData["args"]["time"] = Math.floor(Date.now() / 1000);
         // copiedData["args"]["time"] = 1709887252;
         let atomPayload = new AtomicalsPayload(copiedData);
-
+        console.log('atomPayload.....',atomPayload)
+ 
         let updatedBaseCommit: { scriptP2TR; hashLockP2TR; hashscript } =
             workerPrepareCommitRevealConfig(
                 workerOptions.opType,
@@ -163,7 +164,8 @@ if (parentPort) {
 
 
             // Add input and output to PSBT
-            //sequence=11072
+
+
             psbtStart.addInput({
                 hash: fundingUtxo.txid,
                 index: fundingUtxo.index,
@@ -186,33 +188,20 @@ if (parentPort) {
             // psbtStart.toHex
             prelimTx = psbtStart.extractTransaction(true);
 
-            const checkTxid = prelimTx.getId();
-            console.log("raw", prelimTx.toHex())
-            //console.log("----------", checkTxid)
-            // console.log("reresult===", workerPerformBitworkForCommitTx &&
-            //     hasValidBitwork(
-            //         checkTxid,
-            //         workerBitworkInfoCommit?.prefix as any,
-            //         workerBitworkInfoCommit?.ext as any
-            //     ))
-            fetch('http://localhost:9900/mine', {
-                method: "POST",
-                body: JSON.stringify({ prefixBytes: "aabb", rawTx: prelimTx.toHex() })
-            })
-                .then(function (response) {
-                    if (!response.ok) {
-                        throw new Error('HTTP请求失败: ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(function (data) {
-                    console.log('HTTP请求成功:', data);
-                })
-                .catch(function (error) {
-                    console.error('发生错误:', error);
-                });
-            return
-            // Check if there is a valid proof of work
+            let checkTxid = prelimTx.getId();
+           // console.log("raw", prelimTx.toHex())
+            console.log("----------", checkTxid)
+            //nvidia-smi -l
+         
+            console.log("sequence", psbtStart.txInputs[0].sequence, workerPerformBitworkForCommitTx &&
+                hasValidBitwork(
+                    checkTxid,
+                    workerBitworkInfoCommit?.prefix as any,
+                    workerBitworkInfoCommit?.ext as any
+                )
+            )
+
+          
             if (
                 workerPerformBitworkForCommitTx &&
                 hasValidBitwork(
@@ -220,7 +209,6 @@ if (parentPort) {
                     workerBitworkInfoCommit?.prefix as any,
                     workerBitworkInfoCommit?.ext as any
                 )
-
 
             ) {
 
@@ -246,7 +234,7 @@ if (parentPort) {
                 console.log("end........")
                 break;
             }
-
+            return 
             sequence++;
             generated++;
 

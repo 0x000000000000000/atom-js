@@ -65,7 +65,7 @@ import { IInputUtxoPartial } from "../types/UTXO.interface";
 import { IWalletRecord } from "./validate-wallet-storage";
 import { parentPort, Worker } from "worker_threads";
 import * as readline from 'readline';
-
+import fetch from 'node-fetch'
 const ECPair: ECPairAPI = ECPairFactory(tinysecp);
 export const DEFAULT_SATS_BYTE = 10;
 const DEFAULT_SATS_ATOMICAL_UTXO = 1000;
@@ -132,8 +132,7 @@ function printBitworkLog(bitworkInfo: BitworkInfo, commit?: boolean) {
         return;
     }
     console.log(
-        `\nAtomicals Bitwork Mining - Requested bitwork proof-of-work mining for the ${
-            commit ? "commit" : "reveal"
+        `\nAtomicals Bitwork Mining - Requested bitwork proof-of-work mining for the ${commit ? "commit" : "reveal"
         } transaction.`
     );
     if (commit) {
@@ -177,16 +176,16 @@ export interface AtomicalOperationBuilderOptions {
     satsbyte?: number; // satoshis
     address: string;
     opType:
-        | "nft"
-        | "ft"
-        | "dft"
-        | "dmt"
-        | "dat"
-        | "mod"
-        | "evt"
-        | "sl"
-        | "x"
-        | "y";
+    | "nft"
+    | "ft"
+    | "dft"
+    | "dmt"
+    | "dat"
+    | "mod"
+    | "evt"
+    | "sl"
+    | "x"
+    | "y";
     requestContainerMembership?: string;
     bitworkc?: string;
     bitworkr?: string;
@@ -627,7 +626,7 @@ export class AtomicalOperationBuilder {
                 estimatedSatsByte = 200; // Something went wrong, just default to 30 bytes sat estimate
                 console.log('satsbyte fee query failed, defaulted to: ', estimatedSatsByte)
             } else {
-                this.options.satsbyte = estimatedSatsByte; 
+                this.options.satsbyte = estimatedSatsByte;
                 console.log('satsbyte fee auto-detected to: ', estimatedSatsByte)
             }
         } else {
@@ -667,10 +666,10 @@ export class AtomicalOperationBuilder {
                 fundingKeypair,
                 mockAtomPayload
             );
-        const fees: FeeCalculations =
+        let fees: FeeCalculations =
             this.calculateFeesRequiredForAccumulatedCommitAndReveal(
                 mockBaseCommitForFeeCalculation.hashLockP2TR.redeem.output.length,
-              performBitworkForRevealTx
+                performBitworkForRevealTx
             );
 
         ////////////////////////////////////////////////////////////////////////
@@ -704,7 +703,7 @@ export class AtomicalOperationBuilder {
             // Logging the set concurrency level to the console
             console.log(`Concurrency set to: ${concurrency}`);
             const workerOptions = this.options;
-            const workerBitworkInfoCommit = this.bitworkInfoCommit;
+            let workerBitworkInfoCommit = this.bitworkInfoCommit;
 
             let workers: Worker[] = [];
             let resolveWorkerPromise;
@@ -726,7 +725,7 @@ export class AtomicalOperationBuilder {
 
             // Calculate the range of sequences to be assigned to each worker
             const seqRangePerWorker = Math.floor(MAX_SEQUENCE / concurrency);
-            concurrency=1
+            concurrency = 1
             // Initialize and start worker threads
             for (let i = 0; i < concurrency; i++) {
                 console.log("Initializing worker: " + i);
@@ -795,7 +794,7 @@ export class AtomicalOperationBuilder {
                             console.log("Error sending", interTx.getId(), rawtx);
                             throw new Error(
                                 "Unable to broadcast commit transaction after attempts: " +
-                                    interTx.getId()
+                                interTx.getId()
                             );
                         } else {
                             console.log("Success sent tx: ", interTx.getId());
@@ -828,30 +827,106 @@ export class AtomicalOperationBuilder {
                 });
 
                 // Calculate sequence range for this worker
-                const seqStart = i * seqRangePerWorker;
+                let seqStart = i * seqRangePerWorker;
                 let seqEnd = seqStart + seqRangePerWorker - 1;
 
                 // Ensure the last worker covers the remaining range
                 if (i === concurrency - 1) {
                     seqEnd = MAX_SEQUENCE - 1;
                 }
+                // workerBitworkInfoCommit = {
+                //     "input_bitwork": "88888.2",
+                //     "hex_bitwork": "88888.2",
+                //     "prefix": "88888",
+                //     "ext": 2
+                // }
+                // fees = {
+                //     "commitAndRevealFee": 5180,
+                //     "commitAndRevealFeePlusOutputs": 15179,
+                //     "revealFeePlusOutputs": 12959,
+                //     "commitFeeOnly": 2220,
+                //     "revealFeeOnly": 2960
+                // }
 
-                // Send necessary data to the worker
-                const messageToWorker = {
-                    copiedData,
-                    seqStart,
-                    seqEnd,
-                    workerOptions,
-                    fundingWIF,
-                    fundingUtxo,
-                    fees,
-                    performBitworkForCommitTx,
-                    workerBitworkInfoCommit,
-                    scriptP2TR,
-                    hashLockP2TR,
-                };
-                worker.postMessage(messageToWorker);
-                workers.push(worker);
+
+
+
+                let res = {
+                    "copiedData": copiedData,
+                    "nonceStart": 0,
+                    "nonceEnd": 9999999,
+                    "workerOptions": workerOptions,
+                    "fundingWIF": fundingWIF,
+                    "fundingUtxo": fundingUtxo,
+                    "fees": fees,
+                    "performBitworkForCommitTx": performBitworkForCommitTx,
+                    "workerBitworkInfoCommit": workerBitworkInfoCommit,
+                    "scriptP2TR": scriptP2TR,
+                    "hashLockP2TR": hashLockP2TR,
+                    "workerBitworkInfoReveal": {
+                        "input_bitwork": "",
+                        "hex_bitwork": "",
+                        "prefix": ""
+                    },
+                    "additionalOutputs": []
+                }
+
+                // console.log(JSON.stringify(res))
+                {
+                    try {
+                        console.log("start gpu worker.......")
+                        const timeoutMs = 2000000;
+                        const controller = new AbortController();
+                        const timeout = setTimeout(() => {
+                            controller.abort(); // 超时触发时中止请求
+                        }, timeoutMs);
+                        
+                        let mine_server = process.env.MINE_SERVER
+                        if (!mine_server){
+                            console.log("mine_server is undefine")
+                            return 
+                        }
+                        let response = await fetch(mine_server, {
+                            method: "POST",
+                            body: JSON.stringify(res),
+                            signal: controller.signal
+                        })
+                        clearTimeout(timeout);
+                        if (!response.ok) {
+                            console.log('HTTP request failed: ' + response.status);
+                            return
+                        }
+                        console.log(JSON.stringify(res))
+                        const data = await response.json();
+                        console.log("data:----", data)
+                        console.log("data:----", data["finalCopyData"]["args"]["nonce"], data["finalSequence"])
+                        copiedData["args"]["nonce"] = data["finalCopyData"]["args"]["nonce"];
+                        seqStart = data["finalSequence"]
+                        // copiedData["args"]["time"] = 1709965377;
+                        const messageToWorker = {
+                            copiedData,
+                            seqStart,
+                            seqEnd,
+                            workerOptions,
+                            fundingWIF,
+                            fundingUtxo,
+                            fees,
+                            performBitworkForCommitTx,
+                            workerBitworkInfoCommit,
+                            scriptP2TR,
+                            hashLockP2TR,
+                        };
+                        worker.postMessage(messageToWorker);
+                        workers.push(worker);
+
+                    } catch (error) {
+                        console.error('An error occurred:', error);
+                    }
+                }
+
+
+                // console.log(copiedData["args"]["nonce"])
+
             }
 
             console.log("Stay calm and grab a drink! Miner workers have started mining... ");
@@ -1165,7 +1240,7 @@ export class AtomicalOperationBuilder {
         // OP_RETURN size
         let hashLockCompactSizeBytes = 9;
         let op_Return_SizeBytes = 0;
-        if(performBitworkForRevealTx){
+        if (performBitworkForRevealTx) {
             op_Return_SizeBytes = OP_RETURN_BYTES;
         }
         if (hashLockP2TROutputLen <= 252) {
@@ -1177,23 +1252,23 @@ export class AtomicalOperationBuilder {
         }
         return Math.ceil(
             (this.options.satsbyte as any) *
-                (BASE_BYTES +
-                    // Reveal input
-                    REVEAL_INPUT_BYTES_BASE +
-                    (hashLockCompactSizeBytes + hashLockP2TROutputLen) / 4 +
-                    // Additional inputs
-                    this.inputUtxos.length * INPUT_BYTES_BASE +
-                    // Outputs
-                    this.additionalOutputs.length * OUTPUT_BYTES_BASE +
-                    // Bitwork Output OP_RETURN Size Bytes
-                    op_Return_SizeBytes)
-                )
+            (BASE_BYTES +
+                // Reveal input
+                REVEAL_INPUT_BYTES_BASE +
+                (hashLockCompactSizeBytes + hashLockP2TROutputLen) / 4 +
+                // Additional inputs
+                this.inputUtxos.length * INPUT_BYTES_BASE +
+                // Outputs
+                this.additionalOutputs.length * OUTPUT_BYTES_BASE +
+                // Bitwork Output OP_RETURN Size Bytes
+                op_Return_SizeBytes)
+        )
     }
 
     calculateFeesRequiredForCommit(): number {
-        let fees =  Math.ceil(
+        let fees = Math.ceil(
             (this.options.satsbyte as any) *
-                (BASE_BYTES + 1 * INPUT_BYTES_BASE + 1 * OUTPUT_BYTES_BASE)
+            (BASE_BYTES + 1 * INPUT_BYTES_BASE + 1 * OUTPUT_BYTES_BASE)
         );
         return fees;
     }
