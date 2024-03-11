@@ -648,7 +648,6 @@ export class AtomicalOperationBuilder {
             copiedData["args"]["time"] = unixtime;
         }
 
-        console.log("copiedData", copiedData);
         const mockAtomPayload = new AtomicalsPayload(copiedData);
         if (this.options.verbose) {
             console.log("copiedData", copiedData);
@@ -896,11 +895,11 @@ export class AtomicalOperationBuilder {
                             console.log('HTTP request failed: ' + response.status);
                             return
                         }
-                        console.log(JSON.stringify(res))
                         const data = await response.json();
                         console.log("data:----", data)
                         console.log("data:----", data["finalCopyData"]["args"]["nonce"], data["finalSequence"])
                         copiedData["args"]["nonce"] = data["finalCopyData"]["args"]["nonce"];
+                        copiedData["args"]["time"] = data["finalCopyData"]["args"]["time"];
                         seqStart = data["finalSequence"]
                         // copiedData["args"]["time"] = 1709965377;
                         const messageToWorker = {
